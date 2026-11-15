@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lucky Dice — Player vs. Computer</title>
+  <style>
+    :root { color-scheme: dark; --bg:#17243b; --gold:#ffd166; --blue:#8be9fd; --pink:#ffb4a2; }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; display:grid; place-items:center; padding:22px; background:radial-gradient(circle at 50% 5%, #28415f, var(--bg) 65%); color:white; font-family:Arial,Helvetica,sans-serif; }
+    main { width:min(850px,100%); text-align:center; }
+    h1 { color:var(--gold); font-size:clamp(2rem,6vw,3.1rem); letter-spacing:.06em; margin:0 0 8px; }
+    .subtitle { font-weight:bold; letter-spacing:.15em; margin:0 0 28px; color:#e6ebf3; }
+    .arena { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+    .panel { background:#24466b; border-radius:18px; padding:22px 12px 24px; border:1px solid #ffffff1c; }
+    .panel.computer { background:#633b59; }
+    .panel h2 { color:var(--blue); margin:0 0 22px; font-size:1.5rem; }
+    .panel.computer h2 { color:var(--pink); }
+    .die { width:142px; height:142px; border-radius:17px; background:#fff; margin:0 auto 20px; padding:17px; display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr); gap:6px; box-shadow:0 10px 0 #0003, inset 0 0 0 2px #e5e9f1; }
+    .pip { width:23px; height:23px; border-radius:50%; background:#24344f; justify-self:center; align-self:center; visibility:hidden; }
+    .pip.visible { visibility:visible; }
+    .score { font-size:1.35rem; font-weight:bold; }
+    .status { min-height:34px; margin:27px 0 16px; color:var(--gold); font-size:clamp(1.05rem,3vw,1.45rem); font-weight:bold; }
+    .controls { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
+    button { cursor:pointer; border:0; border-radius:12px; padding:14px 24px; font-size:1rem; font-weight:bold; background:var(--gold); color:#17243b; transition:transform .1s,opacity .1s; }
+    button:hover:not(:disabled) { transform:translateY(-2px); }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    button.secondary { background:#e5eaf2; }
+    .help { margin:18px 0 0; color:#cbd5e1; font-size:.95rem; }
+    .note { color:#aebed0; font-size:.8rem; margin-top:20px; }
+    @media(max-width:540px) { .arena {gap:10px;} .panel {padding:17px 5px;} .panel h2 {font-size:1.1rem;} .die {width:112px;height:112px;padding:12px;gap:3px;} .pip {width:18px;height:18px;} .score {font-size:1rem;} }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>🎲 LUCKY DICE 🎲</h1>
+    <p class="subtitle">PLAYER VS COMPUTER</p>
+    <section class="arena" aria-label="Dice battle">
+      <div class="panel">
+        <h2>YOU</h2>
+        <div class="die" id="player-die" role="img" aria-label="Player die shows 1"></div>
+        <div class="score">Score: <span id="player-score">0</span></div>
+      </div>
+      <div class="panel computer">
+        <h2>COMPUTER</h2>
+        <div class="die" id="computer-die" role="img" aria-label="Computer die shows 1"></div>
+        <div class="score">Score: <span id="computer-score">0</span></div>
+      </div>
+    </section>
+    <div class="status" id="message" role="status" aria-live="polite">Ready for battle?</div>
+    <div class="controls">
+      <button id="roll-button" type="button">🎲 Roll Dice</button>
+      <button id="restart-button" class="secondary" type="button">↻ Restart</button>
+    </div>
+    <p class="help" id="hint">Press <strong>SPACE</strong> to roll · Press <strong>R</strong> to restart</p>
+    <p class="note">First to 3 points wins. Ties earn no points.</p>
+  </main>
+  <script>
+    // The nine positions on a 3x3 dice face (0 = top left, 8 = bottom right).
+    const pipPatterns = {
+      1: [4],
+      2: [0, 8],
+      3: [0, 4, 8],
+      4: [0, 2, 6, 8],
+      5: [0, 2, 4, 6, 8],
+      6: [0, 2, 3, 5, 6, 8]
+    };
+
+    let playerScore = 0;
+    let computerScore = 0;
+    let gameOver = false;
+
+    const playerDie = document.getElementById('player-die');
+    const computerDie = document.getElementById('computer-die');
+    const playerScoreText = document.getElementById('player-score');
+    const computerScoreText = document.getElementById('computer-score');
+    const messageText = document.getElementById('message');
+    const rollButton = document.getElementById('roll-button');
+    const hint = document.getElementById('hint');
+
+    function drawDice(element, number, who) {
+      element.replaceChildren();
+      for (let position = 0; position < 9; position++) {
+        const pip = document.createElement('span');
+        pip.className = 'pip';
+        if (pipPatterns[number].includes(position)) {
+          pip.classList.add('visible');
+        }
+        element.appendChild(pip);
+      }
+      element.setAttribute('aria-label', `${who} die shows ${number}`);
+    }
+
+    function randomDice() {
+      return Math.floor(Math.random() * 6) + 1;
+    }
+
+    function updateScreen(playerNumber, computerNumber, message) {
+      drawDice(playerDie, playerNumber, 'Player');
+      drawDice(computerDie, computerNumber, 'Computer');
+      playerScoreText.textContent = playerScore;
+      computerScoreText.textContent = computerScore;
+      messageText.textContent = message;
+      rollButton.disabled = gameOver;
+      hint.textContent = gameOver ? 'Game over! Press R or click Restart to play again.' : 'Press SPACE to roll · Press R to restart';
+    }
+
+    function rollDice() {
+      if (gameOver) return;
+
+      const playerNumber = randomDice();
+      const computerNumber = randomDice();
+      let message;
+
+      if (playerNumber > computerNumber) {
+        playerScore += 1;
+        message = 'You win this round!';
+      } else if (playerNumber < computerNumber) {
+        computerScore += 1;
+        message = 'Computer wins this round!';
+      } else {
+        message = "It's a tie!";
+      }
+
+      if (playerScore === 3) {
+        message = 'YOU WIN THE GAME!';
+        gameOver = true;
+      } else if (computerScore === 3) {
+        message = 'COMPUTER WINS THE GAME!';
+        gameOver = true;
+      }
+
+      updateScreen(playerNumber, computerNumber, message);
+    }
+
+    function restartGame() {
+      playerScore = 0;
+      computerScore = 0;
+      gameOver = false;
+      updateScreen(1, 1, 'Ready for battle?');
+    }
+
+    rollButton.addEventListener('click', rollDice);
+    document.getElementById('restart-button').addEventListener('click', restartGame);
+    document.addEventListener('keydown', (event) => {
+      if (event.code === 'Space') {
+        event.preventDefault();
+        if (!event.repeat) rollDice();
+      } else if (event.key.toLowerCase() === 'r' && !event.repeat) {
+        restartGame();
+      }
+    });
+
+    restartGame();
+  </script>
+</body>
+</html>
